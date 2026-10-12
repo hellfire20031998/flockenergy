@@ -1,0 +1,166 @@
+const code = { type: ['string', 'null'] };
+const hierarchyNode = { type: 'object', properties: { code, name: code }, required: ['code', 'name'] };
+
+export const schemas = [
+  {
+    $id: 'Error',
+    type: 'object',
+    properties: { error: { type: 'string' }, message: { type: 'string' } },
+    required: ['error', 'message'],
+  },
+  {
+    $id: 'Hierarchy',
+    type: 'object',
+    description: 'One level per key, zone down to distribution transformer.',
+    properties: Object.fromEntries(['zone', 'circle', 'division', 'subdivision', 'substation', 'feeder', 'dt'].map((l) => [l, hierarchyNode])),
+  },
+  {
+    $id: 'Location',
+    type: ['object', 'null'],
+    properties: { lat: { type: 'number' }, lng: { type: 'number' } },
+    required: ['lat', 'lng'],
+  },
+  {
+    $id: 'MeterSummary',
+    type: 'object',
+    properties: {
+      id: { type: 'string', examples: ['J100000'] },
+      serialNo: { type: 'string', examples: ['SE33962'] },
+      make: { type: 'string', examples: ['HPL'] },
+      phaseType: { type: 'string', enum: ['single', 'three'] },
+      installStatus: { type: 'string', enum: ['installed', 'faulty', 'decommissioned'] },
+      installType: { type: 'string', enum: ['whole_current', 'ct_operated'] },
+      build: { type: 'string', enum: ['legacy', 'v2'] },
+      dtCode: { type: 'string', examples: ['DT-001'] },
+      feederCode: code,
+      location: { $ref: 'Location#' },
+    },
+    required: ['id', 'serialNo', 'make', 'phaseType', 'installStatus', 'dtCode'],
+  },
+  {
+    $id: 'Issue',
+    type: 'object',
+    description: 'A data-quality finding. Extra fields depend on the type.',
+    properties: {
+      type: { type: 'string', examples: ['blank_hierarchy_field'] },
+      severity: { type: 'string', enum: ['info', 'warning', 'error'] },
+      message: { type: 'string' },
+      meterId: { type: 'string' },
+      dtCode: { type: 'string' },
+      level: { type: 'string' },
+      field: { type: 'string' },
+      code: { type: 'string' },
+      value: { type: ['string', 'null'] },
+      resolvedValue: { type: ['string', 'null'] },
+      parents: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['type', 'severity', 'message'],
+  },
+  {
+    $id: 'NetworkNode',
+    type: 'object',
+    properties: {
+      level: { type: 'string', enum: ['zone', 'circle', 'division', 'subdivision', 'substation', 'feeder', 'dt'] },
+      code: { type: ['string', 'null'] },
+      name: { type: ['string', 'null'] },
+      capacityKva: { type: ['number', 'null'] },
+      meterCount: { type: 'integer' },
+      meterIds: { type: 'array', items: { type: 'string' } },
+      children: { type: 'array', items: { $ref: 'NetworkNode#' } },
+    },
+    required: ['level', 'code'],
+  },
+  {
+    $id: 'Transformer',
+    type: 'object',
+    properties: {
+      code: { type: 'string', examples: ['DT-001'] },
+      name: { type: 'string', examples: ['Malviya Nagar DT 1'] },
+      feederCode: code,
+      capacityKva: { type: 'number', examples: [100] },
+      meterCount: { type: 'integer' },
+      hierarchy: { $ref: 'Hierarchy#' },
+    },
+    required: ['code', 'name', 'capacityKva'],
+  },
+  {
+    $id: 'Meter',
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      serialNo: { type: 'string' },
+      make: { type: 'string' },
+      phaseType: { type: 'string', enum: ['single', 'three'] },
+      installStatus: { type: 'string', enum: ['installed', 'faulty', 'decommissioned'] },
+      installType: { type: 'string', enum: ['whole_current', 'ct_operated'] },
+      build: { type: 'string', enum: ['legacy', 'v2'] },
+      dtCode: { type: 'string' },
+      location: { $ref: 'Location#' },
+      hierarchy: { $ref: 'Hierarchy#', description: 'Exactly what the portal says for this meter; blanks are null.' },
+      resolvedHierarchy: { $ref: 'Hierarchy#', description: 'Chain agreed by the majority of meters on the same DT, with the transformer list as tie-breaker.' },
+      transformer: { $ref: 'Transformer#' },
+      issues: { type: 'array', items: { $ref: 'Issue#' } },
+    },
+    required: ['id', 'serialNo', 'make', 'phaseType', 'installStatus', 'dtCode', 'hierarchy'],
+  },
+  {
+    $id: 'Reading',
+    type: 'object',
+    properties: {
+      timestamp: { type: 'string', format: 'date-time', description: 'ISO 8601 with the +05:30 (IST) offset', examples: ['2026-06-24T00:00:00+05:30'] },
+      kwh: { type: 'number', description: 'Cumulative active energy register' },
+      kvah: { type: 'number', description: 'Cumulative apparent energy register' },
+      voltR: { type: ['number', 'null'], description: 'R-phase voltage' },
+      intervalMinutes: { type: ['integer', 'null'], description: 'Minutes since the previous reading; null on the first' },
+      intervalKwh: { type: ['number', 'null'], description: 'Energy consumed since the previous reading' },
+      intervalKvah: { type: ['number', 'null'] },
+      anomalies: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['timestamp', 'kwh', 'kvah'],
+  },
+  {
+    $id: 'ReadingsResponse',
+    type: 'object',
+    properties: {
+      meterId: { type: 'string' },
+      window: { type: 'object', properties: { from: { type: ['string', 'null'] }, to: { type: ['string', 'null'] } } },
+      cadence: { type: 'string', enum: ['30min', 'daily', 'irregular', 'unknown'] },
+      summary: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer' },
+          from: { type: ['string', 'null'] },
+          to: { type: ['string', 'null'] },
+          totalKwh: { type: ['number', 'null'] },
+          totalKvah: { type: ['number', 'null'] },
+          averageDailyKwh: { type: ['number', 'null'] },
+          averageKva: { type: ['number', 'null'], description: 'Mean apparent power over the window (kVAh / hours)' },
+          minVoltR: { type: ['number', 'null'] },
+          maxVoltR: { type: ['number', 'null'] },
+        },
+      },
+      readings: { type: 'array', items: { $ref: 'Reading#' } },
+      dropped: {
+        type: 'array',
+        description: 'Portal rows that were discarded, and why. Never silently.',
+        items: {
+          type: 'object',
+          properties: { index: { type: 'integer' }, timestamp: { type: ['string', 'null'] }, reasons: { type: 'array', items: { type: 'string' } } },
+        },
+      },
+    },
+    required: ['meterId', 'cadence', 'summary', 'readings', 'dropped'],
+  },
+];
+
+export const pageQuery = {
+  page: { type: 'integer', minimum: 1, default: 1 },
+  pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
+};
+
+export const errorResponses = {
+  400: { description: 'Invalid request', $ref: 'Error#' },
+  404: { description: 'Not found', $ref: 'Error#' },
+  502: { description: 'The portal failed or rejected our session', $ref: 'Error#' },
+  503: { description: 'Snapshot not loaded yet, or the portal is rate-limiting us', $ref: 'Error#' },
+};

@@ -1,0 +1,23 @@
+{
+  "name": "urja-meter-api",
+  "version": "1.0.0",
+  "description": "Clean, documented API service in front of the legacy Urja Meter Ops portal",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "openapi": "node scripts/generate-openapi.js",
+    "crawl": "node scripts/crawl-fixtures.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/swagger": "^9.9.2",
+    "@fastify/swagger-ui": "^6.1.2",
+    "fastify": "^5.12.5"
+  }
+}
